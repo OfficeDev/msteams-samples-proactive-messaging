@@ -3,12 +3,12 @@ page_type: sample
 languages:
 - csharp
 products:
-- dotnet
+- office-teams
 description: "Two samples to highlight solutions to two challenges with building proactive messaging apps in Microsoft Teams"
-urlFragment: "update-this-to-unique-url-stub"
+urlFragment: "msteams-samples-proactive-messaging"
 ---
 
-# Official Microsoft Sample
+# Teams Proactive Messaging Samples
 
 <!-- 
 Guidelines on README format: https://review.docs.microsoft.com/help/onboard/admin/samples/concepts/readme-template?branch=master
