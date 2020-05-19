@@ -20,16 +20,23 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
         static readonly Random random = new Random();
 
         static IAsyncPolicy CreatePolicy() {
+            // Policy for handling the short-term transient throttling.
             var transientRetryPolicy = Policy
                     .Handle<ErrorResponseException>(ex => ex.Message.Contains("429"))
                     .WaitAndRetryAsync(
                         retryCount: 3, 
                         (attempt) => TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(random.Next(0, 1000)));
 
+            // Policy to avoid sending even more messages when the long-term throttling occurs. 
+            // Note, in this application this cannot trip since it only sends one message at a time!
+            // This is left in for completeness / demonstration purposes.
             var circuitBreakerPolicy = Policy
                 .Handle<ErrorResponseException>(ex => ex.Message.Contains("429"))
                 .CircuitBreakerAsync(exceptionsAllowedBeforeBreaking: 5, TimeSpan.FromMinutes(10));
             
+            // Policy to wait and retry when long-term throttling occurs. 
+            // Note, in this application this cannot trip since the circuit breaker above cannot trip.
+            // This is left in for completeness / demonstration purposes.
             var outerRetryPolicy = Policy
                 .Handle<BrokenCircuitException>()
                 .WaitAndRetryAsync(
@@ -150,12 +157,15 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
             return rootCommand.InvokeAsync(args);
         }
 
+        /// Send a one-on-one message to a user.
+        /// This method also makes the message appear in the activity feed!
         public static async Task SendToUserAsync(string appId, string appPassword, string serviceUrl, string conversationId, string message)
         {
             var activity = MessageFactory.Text(message);
-            activity.Summary = message;
-            activity.TeamsNotifyUser();
-            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
+            activity.Summary = message; // Ensure that the summary text is populated so the toast notifications aren't generic text.
+            activity.TeamsNotifyUser(); // Send the message into the activity feed.
+
+            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl); // Required or the activity will be sent w/o auth headers.
 
             var credentials = new MicrosoftAppCredentials(appId, appPassword);
 
@@ -164,19 +174,7 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
                     await connectorClient.Conversations.SendToConversationAsync(conversationId, activity));
         }
 
-        public static async Task SendToThreadAsync(string appId, string appPassword, string serviceUrl, string conversationId, string message)
-        {
-            var activity = MessageFactory.Text(message);
-            activity.Summary = message;
-            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
-
-            var credentials = new MicrosoftAppCredentials(appId, appPassword);
-
-            var connectorClient = new ConnectorClient(new Uri(serviceUrl), credentials);
-            await SendWithRetries(async () => 
-                    await connectorClient.Conversations.SendToConversationAsync(conversationId, activity));
-        }
-
+        /// Create a new thread in a channel.
         public static async Task CreateChannelThreadAsync(string appId, string appPassword, string serviceUrl, string channelId, string message)
         {
             // Create the connector client using the service url & the bot credentials.
@@ -198,8 +196,26 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
                   },
                   Activity = activity
             };
-            
-            await connectorClient.Conversations.CreateConversationAsync(conversationParameters);
+
+            await SendWithRetries(async () => 
+                    await connectorClient.Conversations.CreateConversationAsync(conversationParameters));
         }
+
+        /// Send a message to a thread in a channel.
+        public static async Task SendToThreadAsync(string appId, string appPassword, string serviceUrl, string conversationId, string message)
+        {
+            var activity = MessageFactory.Text(message);
+            activity.Summary = message; // Ensure that the summary text is populated so the toast notifications aren't generic text.
+
+            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl); // Required or the activity will be sent w/o auth headers.
+
+            var credentials = new MicrosoftAppCredentials(appId, appPassword);
+
+            var connectorClient = new ConnectorClient(new Uri(serviceUrl), credentials);
+            await SendWithRetries(async () => 
+                    await connectorClient.Conversations.SendToConversationAsync(conversationId, activity));
+        }
+
+       
     }
 }

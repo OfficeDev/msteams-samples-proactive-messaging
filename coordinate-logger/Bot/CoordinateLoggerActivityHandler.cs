@@ -43,13 +43,38 @@ namespace Microsoft.Teams.CoordinateLogger.Bot
             ITurnContext<IConversationUpdateActivity> turnContext,
             CancellationToken cancellationToken)
         {
+            await this.HandleUserConversationUpdateAsync(turnContext);
             await this.HandleTeamUserCoordinatesAsync(turnContext);
             await this.HandleChannelThreadCoordinatesAsync(turnContext);
-            await this.HandleUserConversationUpdateAsync(turnContext);
-
+            
             await base.OnConversationUpdateActivityAsync(turnContext, cancellationToken);
         }
 
+        
+        /// Get the coordinates of a user when they install the app personally.
+        private Task HandleUserConversationUpdateAsync(ITurnContext<IConversationUpdateActivity> turnContext)
+        {
+            var tenantId = turnContext.Activity.Conversation?.TenantId;
+            var serviceUrl = turnContext.Activity.ServiceUrl;
+            var conversationId = turnContext.Activity.Conversation?.Id;
+
+            var isPersonalConversation = turnContext.Activity.Conversation.ConversationType == "personal";
+            var isInstallEvent = turnContext.Activity.MembersAdded?.Any(member => member.Id == $"28:{this.appCredentials.MicrosoftAppId}") == true;
+
+            if (!isPersonalConversation || !isInstallEvent)
+            {
+                return Task.CompletedTask;
+            }
+        
+            var teamsConnectorClient = new TeamsConnectorClient(new Uri(serviceUrl), this.appCredentials);
+            var teamsChannelData = turnContext.Activity.GetChannelData<TeamsChannelData>();
+            
+            this.LogConversationCoordinates("User", serviceUrl, conversationId);
+
+            return Task.CompletedTask;
+        }
+
+        /// Get the coordinates of all the users inside the Team.
         private async Task HandleTeamUserCoordinatesAsync(ITurnContext<IConversationUpdateActivity> turnContext)
         {
             var tenantId = turnContext.Activity.Conversation?.TenantId;
@@ -59,6 +84,7 @@ namespace Microsoft.Teams.CoordinateLogger.Bot
             var isChannelConversationType = turnContext.Activity.Conversation.ConversationType == "channel";
             var isInstallEvent = turnContext.Activity.MembersAdded?.Any(member => member.Id == $"28:{this.appCredentials.MicrosoftAppId}") == true;
 
+            // We only care about channel conversations.
             if (!isChannelConversationType)
             {
                 return;
@@ -86,6 +112,7 @@ namespace Microsoft.Teams.CoordinateLogger.Bot
             }
         }
 
+        /// Create a conversation in each channel & get the coordinates to that channel thread.
         private async Task HandleChannelThreadCoordinatesAsync(ITurnContext<IConversationUpdateActivity> turnContext)
         {
             var tenantId = turnContext.Activity.Conversation?.TenantId;
@@ -108,28 +135,6 @@ namespace Microsoft.Teams.CoordinateLogger.Bot
             {
                 await this.CreateConversationForChannelAsync(tenantId, channel.Id, serviceUrl);
             }
-        }
-
-        private Task HandleUserConversationUpdateAsync(ITurnContext<IConversationUpdateActivity> turnContext)
-        {
-            var tenantId = turnContext.Activity.Conversation?.TenantId;
-            var serviceUrl = turnContext.Activity.ServiceUrl;
-            var conversationId = turnContext.Activity.Conversation?.Id;
-
-            var isPersonalConversation = turnContext.Activity.Conversation.ConversationType == "personal";
-            var isInstallEvent = turnContext.Activity.MembersAdded?.Any(member => member.Id == $"28:{this.appCredentials.MicrosoftAppId}") == true;
-
-            if (!isPersonalConversation || !isInstallEvent)
-            {
-                return Task.CompletedTask;
-            }
-        
-            var teamsConnectorClient = new TeamsConnectorClient(new Uri(serviceUrl), this.appCredentials);
-            var teamsChannelData = turnContext.Activity.GetChannelData<TeamsChannelData>();
-            
-            this.LogConversationCoordinates("User", serviceUrl, conversationId);
-
-            return Task.CompletedTask;
         }
 
         private async Task CreateConversationForUserAsync(ChannelAccount user, string tenantId, string serviceUrl)
@@ -157,8 +162,8 @@ namespace Microsoft.Teams.CoordinateLogger.Bot
                 },
             };
 
-            // Do not do this until ready to send message
-            // Make more notes here
+            // In a production application, do not make this call until you are ready to send a message
+            // this call will make the chat with this bot appear in the chat list & float it to the top w/ no messages. 
             var response = await connectorClient.Conversations.CreateConversationAsync(conversationParams);
             this.LogConversationCoordinates("User", serviceUrl, response.Id);
         }
@@ -177,6 +182,8 @@ namespace Microsoft.Teams.CoordinateLogger.Bot
                   Activity = activity,
             };
 
+            // In a production application, do not make this call until you are ready to send a message
+            // this call will start a new thread inside the channel.
             var response = await connectorClient.Conversations.CreateConversationAsync(conversationParameters);
 
             this.LogConversationCoordinates("Channel", serviceUrl, response.Id);
