@@ -19,6 +19,9 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
     {
         static readonly Random random = new Random();
 
+        // Create the send policy for Microsoft Teams
+        // For more information about these policies
+        // see: http://www.thepollyproject.org/
         static IAsyncPolicy CreatePolicy() {
             // Policy for handling the short-term transient throttling.
             var transientRetryPolicy = Policy
