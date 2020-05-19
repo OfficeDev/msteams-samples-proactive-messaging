@@ -4,7 +4,7 @@ languages:
 - csharp
 products:
 - dotnet
-description: "Add 150 character max description"
+description: "Two samples to highlight solutions to two challenges with building proactive messaging apps in Microsoft Teams"
 urlFragment: "update-this-to-unique-url-stub"
 ---
 
@@ -18,36 +18,103 @@ Guidance on onboarding samples to docs.microsoft.com/samples: https://review.doc
 Taxonomies for products and languages: https://review.docs.microsoft.com/new-hope/information-architecture/metadata/taxonomies?branch=master
 -->
 
-Give a short description for your sample here. What does it do and why is it important?
+Two samples to highlight solutions to two challenges with building proactive messaging apps in Microsoft Teams. 
 
 ## Contents
 
-Outline the file contents of the repository. It helps users navigate the codebase, build configuration and any related assets.
-
-| File/folder       | Description                                |
-|-------------------|--------------------------------------------|
-| `src`             | Sample source code.                        |
-| `.gitignore`      | Define what to ignore at commit time.      |
-| `CHANGELOG.md`    | List of changes to the sample.             |
-| `CONTRIBUTING.md` | Guidelines for contributing to the sample. |
-| `README.md`       | This README file.                          |
-| `LICENSE`         | The license for the sample.                |
+| File/folder          | Description                                                                 |
+|----------------------|-----------------------------------------------------------------------------|
+| `/coordinate-logger` | Sample of getting conversation coordinates using BotFramework Events & SDK. |
+| `/proactive-cmd`     | Sample of sending proactive messages with throttling policies.              |
+| `/teamsAppManifest`  | App manifest for the teams app.                                             |
+| `.gitignore`         | Define what to ignore at commit time.                                       |
+| `CHANGELOG.md`       | List of changes to the sample.                                              |
+| `CONTRIBUTING.md`    | Guidelines for contributing to the sample.                                  |
+| `README.md`          | This README file.                                                           |
+| `LICENSE`            | The license for the sample.                                                 |
 
 ## Prerequisites
-
-Outline the required components and tools that a user might need to have on their machine in order to run the sample. This can be anything from frameworks, SDKs, OS versions or IDE releases.
+- Microsoft Teams account
+- [.NET Core 3.x SDK](https://dotnet.microsoft.com/download)
+- Publicly addressable https url or tunnel such as [ngrok](https://ngrok.com/) or [Tunnel Relay](https://github.com/OfficeDev/microsoft-teams-tunnelrelay) 
 
 ## Setup
+1. Configure public url to point to http port 5000
+```bash
+# ngrok http -host-header=rewrite 5000
+```
 
-Explain how to prepare the sample once the user clones or downloads the repository. The section should outline every step necessary to install dependencies and set up any settings (for example, API keys and output folders).
+2. Create a Bot Registration
+Either through [App Studio](https://docs.microsoft.com/en-us/microsoftteams/platform/concepts/build-and-test/app-studio-overview) or the Azure portal, create a [Bot Framework registration resource](https://docs.microsoft.com/en-us/azure/bot-service/bot-service-quickstart-registration). (The 'Bot' tab in App Studio).
 
-## Running the sample
+3. Modify the `manifest.json` in the `/teamsAppManifest` folder and replace the `<<BOT-ID>>` with the id from step 2.
 
-Outline step-by-step instructions to execute the sample and see its output. Include steps for executing the sample from the IDE, starting specific services in the Azure portal or anything related to the overall launch of the code.
+4. Zip the contents of `teamsAppManifest` into a `manifest.zip`.
+
+5. Modify the `/coordinate-logger/appsettings.local.json` and fill in the `{{ Bot Id }}` and `{{ Bot Password }}` with the id from step 2.
+
+## Running the samples
+
+### Coordinate Logger
+***Note this is a noisy application, it is recommended you not run this in shared teams where you would disturb other users!***
+
+1. Start the application
+
+    ```bash
+    # dotnet run
+    ```
+    It is running when the following output is displayed.
+    ```
+    Hosting environment: Development
+    Content root path: C:\msteams-samples-proactive-messaging\coordinate-logger
+    Now listening on: https://localhost:5001
+    Now listening on: http://localhost:5000
+    Application started. Press Ctrl+C to shut down.
+    ```
+
+2. Install the app personally in Teams
+    - Go to the `Apps` in the left rail
+    - Select `Upload a custom app` and select the manifest.json file
+    - Click the `Add` Button on the consent screen
+
+    The coordinates of the user should be in the console window
+
+3. Install the app to a Team
+    - Go to the `Apps` in the left rail
+    - Select `Upload a custom app` and select the manifest.json file
+    - Select the down arrow next to the `Add` Button on the consent screen
+    - Select a Team to install to. 
+
+    The app will send a message to each channel in the Team & log the coordinates
+    for each new thread to the console window.
+
+## Proactive CMD
+
+1. Send a message to a user
+    Using the values from the Coordinate Logger for a User's conversation coordinates & Bot registration fill in the parameters to the following command.
+
+    ```bash
+    # dotnet run -- sendUserMessage --app-id="{{Bot Id}}" --app-password="{{Bot Password}}" --service-url="{{ServiceUrl}}" --conversation-id="{{Conversation Id}}" --message="Send Message to a User"
+    ```
+
+    This will send a message to the 1-on-1 conversation with the user
+
+2. Send a message to a thread
+    Using the values from the Coordinate Logger for a Channel Thread's conversation coordinates & Bot registration fill in the parameters to the following command.
+
+    ```bash
+    # dotnet run -- sendChannelThread --app-id="{{Bot Id}}" --app-password="{{Bot Password}}" --service-url="{{ServiceUrl}}" --conversation-id="{{Conversation Id}}" --message="Send Message to a Thread"
+    ```
+
+    This will send a message to the thread
 
 ## Key concepts
 
-Provide users with more context on the tools and services used in the sample. Explain some of the code that is being used and how services interact with each other.
+The two samples correspond with two of the most common challenges when building proactive messaging apps in Microsoft Teams, getting the conversation coordinates and sending messages reliably. 
+
+The `CoordinateLoggerActivityHandler.cs` file in the Conversation Logger demonstrates three separate ways to obtain or generate conversation coordinates for users or channel threads using the BotBuilder SDK.
+
+The `SendWithRetries` function and policy from the `CreatePolicy` function demonstrate how to reliably send messages when dealing with throttling from Microsoft Teams. 
 
 ## Contributing
 
