@@ -24,13 +24,16 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
         // see: http://www.thepollyproject.org/
         static IAsyncPolicy CreatePolicy() {
             // Policy for handling the short-term transient throttling.
+            // Retry on throttling, up to 3 times with a 2,4,8 second delay between with a 0-1s jitter.
             var transientRetryPolicy = Policy
                     .Handle<ErrorResponseException>(ex => ex.Message.Contains("429"))
                     .WaitAndRetryAsync(
                         retryCount: 3, 
                         (attempt) => TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(random.Next(0, 1000)));
 
-            // Policy to avoid sending even more messages when the long-term throttling occurs. 
+            // Policy to avoid sending even more messages when the long-term throttling occurs.
+            // After 5 messages fail to send, the circuit breaker trips & all subsequent calls will throw
+            // a BrokenCircuitException for 10 minutes.
             // Note, in this application this cannot trip since it only sends one message at a time!
             // This is left in for completeness / demonstration purposes.
             var circuitBreakerPolicy = Policy
@@ -38,6 +41,7 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
                 .CircuitBreakerAsync(exceptionsAllowedBeforeBreaking: 5, TimeSpan.FromMinutes(10));
             
             // Policy to wait and retry when long-term throttling occurs. 
+            // This will retry a single message up to 5 times with a 10 minute delay between each attempt.
             // Note, in this application this cannot trip since the circuit breaker above cannot trip.
             // This is left in for completeness / demonstration purposes.
             var outerRetryPolicy = Policy
@@ -45,6 +49,11 @@ namespace Microsoft.Teams.Samples.ProactiveMessageCmd
                 .WaitAndRetryAsync(
                     retryCount: 5,
                     (_) => TimeSpan.FromMinutes(10));
+            
+            // Combine all three policies so that it will first attempt to retry short-term throttling (inner-most)
+            // After 15 (5 messages, 3 failures each) consecutive failed attempts to send a message it will trip the circuit breaker
+            // which will fail all messages for the next ten minutes. It will attempt to send messages up to 5 times for a total
+            // wait of 50 minutes before failing a message.
             return
                 outerRetryPolicy.WrapAsync(
                     circuitBreakerPolicy.WrapAsync(
